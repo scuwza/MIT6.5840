@@ -494,7 +494,6 @@ func (rf *Raft) InstallSnapShot(args *InstallSnapshotRPC, reply *InstallSnapshot
 	defer rf.mu.Unlock()
 	reply.Term = rf.Term
 	if args.Term < rf.Term {
-
 		return
 	}
 
