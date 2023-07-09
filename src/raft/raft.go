@@ -1022,7 +1022,7 @@ func (rf *Raft) ticker() {
 
 		// pause for a random amount of time between 50 and 350
 		// milliseconds.
-		ms := 50 + (rand.Int63() % 300)
+		ms := 50 + (rand.Int63() % 30)
 		time.Sleep(time.Duration(ms) * time.Millisecond)
 	}
 }
@@ -1051,6 +1051,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.Time = time.Now()
 	rf.State = Follower
 	rf.VotedFor = -1
+	rf.Logs = make([]Log, 0)
 
 	rf.nextIndex = make([]int, len(rf.peers))
 	rf.matchIndex = make([]int, len(rf.peers))
