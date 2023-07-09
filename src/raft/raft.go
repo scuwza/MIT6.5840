@@ -161,7 +161,41 @@ func (rf *Raft) readPersist(data []byte) {
 // that index. Raft should now trim its log as much as possible.
 func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	// Your code here (2D).
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+	if index <= rf.Lastindex || index > rf.CommitIndex {
+		return
+	}
+	count := 1
+	oldIndex := rf.Lastindex
+	for key, value := range rf.Logs {
 
+		if key == 0 {
+			continue
+		}
+		count++
+		rf.Lastindex = key + oldIndex
+
+		rf.LastTerm = value.Term
+		if key+oldIndex == index {
+			break
+		}
+
+	}
+
+	newLog := make([]Log, 1)
+	newLog = append(newLog, rf.Logs[count:]...)
+	rf.Logs = newLog
+
+	w := new(bytes.Buffer)
+	e := labgob.NewEncoder(w)
+	e.Encode(rf.VotedFor)
+	e.Encode(rf.Term)
+	e.Encode(rf.Logs)
+	e.Encode(rf.Lastindex)
+	e.Encode(rf.LastTerm)
+	raftstate := w.Bytes()
+	rf.persister.Save(raftstate, snapshot)
 }
 
 // example RequestVote RPC arguments structure.
@@ -916,6 +950,7 @@ func (rf *Raft) killed() bool {
 }
 
 func (rf *Raft) ticker() {
+	go rf.apply()
 	for rf.killed() == false {
 
 		// Your code here (2A)
@@ -925,6 +960,64 @@ func (rf *Raft) ticker() {
 		if time.Since(rf.Time) > time.Duration(100+rand.Intn(300))*time.Millisecond && rf.State != Leader {
 			go rf.StartElection()
 		}
+
+		if rf.State == Leader {
+			i := 0
+			prelogindex := rf.getLastIndex()
+			prelogterm := rf.getLastLogTerm()
+			rf.UpdateCommit()
+
+			for i < len(rf.peers) {
+				if i == rf.me {
+					i++
+					continue
+				}
+				args := AppendEntriesRPC{
+					Term:         rf.Term,
+					LeaderId:     rf.me,
+					LeaderCommit: rf.CommitIndex,
+					PrevLogIndex: prelogindex,
+					PrevLogTerm:  prelogterm,
+				}
+				reply := AppendRes{}
+				if (rf.nextIndex[i] <= prelogindex || rf.nextIndex[i]-rf.matchIndex[i] != 1) && rf.getLastIndex() != 0 {
+					if rf.matchIndex[i] < rf.Lastindex {
+						margs := InstallSnapshotRPC{
+							Term:             rf.Term,
+							LeaderId:         rf.me,
+							LastIncludeIndex: rf.Lastindex,
+							LastIncludeTerm:  rf.LastTerm,
+							Data:             rf.persister.snapshot,
+						}
+						mreply := InstallSnapshotReply{}
+
+						go rf.CallInstallsnapshop(i, &margs, &mreply)
+
+					} else {
+						entry := make([]Log, rf.getLastIndex()-rf.matchIndex[i])
+						copy(entry, rf.Logs[rf.matchIndex[i]+1-rf.Lastindex:])
+
+						nargs := AppendEntriesRPC{
+							Term:         rf.Term,
+							LeaderId:     rf.me,
+							PrevLogIndex: rf.matchIndex[i],
+							PrevLogTerm:  rf.getLogTerm(rf.matchIndex[i]),
+							LeaderCommit: rf.CommitIndex,
+							Entries:      entry,
+						}
+						nreply := AppendRes{}
+						go rf.SyncLog(i, &nargs, &nreply)
+					}
+
+				} else {
+					go rf.SendHeartBeat(i, &args, &reply)
+				}
+
+				i++
+			}
+
+		}
+
 		rf.mu.Unlock()
 
 		// pause for a random amount of time between 50 and 350
