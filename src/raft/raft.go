@@ -498,7 +498,7 @@ func (rf *Raft) HeartBeat(args *AppendEntriesRPC, reply *AppendRes) {
 	i := args.PrevLogIndex + 1
 	// 找到第一个不符合的
 	for i <= rf.getLastIndex() && i-args.PrevLogIndex-1 < len(args.Entries) {
-		if rf.getLogTerm(i) != args.Entries[i].Term {
+		if rf.getLogTerm(i) != args.Entries[i-args.PrevLogIndex-1].Term {
 			break
 		}
 		i = i + 1
