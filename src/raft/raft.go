@@ -314,6 +314,7 @@ func (rf *Raft) SetLeader() {
 
 func (rf *Raft) StartElection() {
 	rf.mu.Lock()
+	rf.State = Candidate
 	i := 0
 	count := 1
 	res := 1
