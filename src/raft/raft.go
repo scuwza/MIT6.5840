@@ -141,17 +141,19 @@ func (rf *Raft) readPersist(data []byte) {
 	d := labgob.NewDecoder(r)
 	var votedFor int
 	var term int
+	var logs []Log
 	var lastIndex int
 	var lastTerm int
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 	if d.Decode(&votedFor) != nil ||
-		d.Decode(&term) != nil || d.Decode(&lastIndex) != nil || d.Decode(&lastTerm) != nil {
+		d.Decode(&term) != nil || d.Decode(&logs) != nil || d.Decode(&lastIndex) != nil || d.Decode(&lastTerm) != nil {
 	} else {
 		rf.VotedFor = votedFor
 		rf.Term = term
+		rf.Logs = logs
 		rf.Lastindex = lastIndex
-		rf.LastTerm = term
+		rf.LastTerm = lastTerm
 	}
 }
 
